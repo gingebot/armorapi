@@ -1,0 +1,115 @@
+#!/bin/python
+import os
+import sys
+import traceback
+
+import requests
+from bs4 import BeautifulSoup
+
+
+
+
+class ArmorApi:
+    """
+    Rest API client for the Armor API, access to legacy and current API authentication methods
+    """    
+
+    def __init__(self,username,password,accountid=None):
+        self.username = username
+        self.password = password
+        self.accountid = accountid
+        self.session = requests.session()
+        self.count401 = 2       
+        self.v2_authentication()
+
+    def v2_authentication(self):
+        self._set_bearer_request_url()
+        self._bearer_authenticate()
+        self._get_bearer_token()
+        self._test_request()
+    
+    def _make_request(self,uri,method="get",data={},json=True):
+        """
+        Makes a request and returns response, catches exceptions 
+        """
+        try:
+            if method == "get":
+                response = self.session.get(uri,data=data)
+            elif method == "post":
+                response = self.session.post(uri,data=data)
+            response.raise_for_status()
+            if json == False:
+                return response
+            else:
+                return response.json()
+        except requests.exceptions.HTTPError as error:
+            print "http error :::::::::::::::::::::::i %s" % response.status_code
+            print self.count401
+            print type(response.status_code)
+            if response.status_code == 401 and self.count401 > 0:
+                print "in the thing"
+                self.count401 -= 1
+                self.v2_authentication()
+            else:    
+                traceback.print_exc()
+                sys.exit()
+        except requests.exceptions.ConnectionError as error:
+            traceback.print_exc()
+            sys.exit()
+        except requests.exceptions.RequestException as error:
+            traceback.print_exc()
+            sys.exit()
+
+    def _set_bearer_request_url(self):
+        """
+        Sets the request url, including parameters for the bearer token request cycles
+        """
+        response_type = 'id_token'
+        response_mode = 'form_post'
+        client_id = 'b2264823-30a3-4706-bf48-4cf80dad76d3'
+        redirect_uri = 'https://amp.armor.com/'
+        client_request_id = 'f85529a0-7f20-4212-073c-0080000000a3'
+        self.bearer_request_url = 'https://sts.armor.com/adfs/oauth2/authorize?response_type=%s&response_mode=%s&client_id=%s&redirect_uri=%s' % (response_type, response_mode, client_id, redirect_uri)
+        
+    def _bearer_authenticate(self):
+        """
+        Completes the initial username/password auth and retrieve context token required for the gest bearer ID request.
+        """
+        payload = { 'UserName' : self.username, 'Password' : self.password, 'AuthMethod' : 'FormsAuthentication' }
+        sso_auth_response = self._make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(sso_auth_response.text, 'html.parser')
+        self.context_token = soup.find('input', {'id' : 'context'})['value']
+
+    def _get_bearer_token(self):
+        """
+        Completes the final request in the bearer auth method, retrieves the bearer token and sets headers required headers for API requests
+        """
+        payload = { 'AuthMethod' : 'AzureMfaServerAuthentication', 'Context' : self.context_token }
+        bearer_response = self._make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(bearer_response.text, 'html.parser')
+        bearer = soup.find('input')['value']
+        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'Bearer %s' % bearer})
+
+    def _test_request_and_accountid(self):
+        """
+        performs an API request to confirm Authentication has worked, also sets the header for account ID, either as provide ID or First account ID from request
+        """
+        json_response = self._make_request('https://api.armor.com/me')
+        
+        accountid = json_response['accounts'][0]['id'] 
+        if not self.accountid and accountid:
+            self.session.headers.update({'X-Account-Context' : accountid})
+        elif self.accountid:
+            self.session.headers.update({'X-Account-Context' : self.accountid})
+
+    def _simulate_fail(self):
+        self.session = requests.session()
+        response = self._make_request('https://api.armor.com/me')
+        print response
+
+if __name__ == "__main__":
+    
+    username = os.environ.get('armor_username')
+    password = os.environ.get('armor_password')
+    accountid = os.environ.get('armor_accountid')
+    armorapi = ArmorApi(username,password,accountid)
