@@ -31,7 +31,7 @@ class ArmorApi:
         self._bearer_authenticate()
         self._get_bearer_token()
         self._test_request_and_accountid()
-        self._simulate_fail()
+        #self._simulate_fail()
 
     def _401_timer(self):
         """
@@ -50,7 +50,7 @@ class ArmorApi:
         else:
             return False
 
-    def _make_request(self,uri,method="get",data={},json=True):
+    def make_request(self,uri,method="get",data={},json=True):
         """
         Makes a request and returns response, catches exceptions 
         """
@@ -61,7 +61,7 @@ class ArmorApi:
                 response = self.session.post(uri,data=data)
             response.raise_for_status()
             if json == False:
-                return response
+                return response.text
             else:
                 return response.json()
 
@@ -94,8 +94,8 @@ class ArmorApi:
         Completes the initial username/password auth and retrieve context token required for the gest bearer ID request.
         """
         payload = { 'UserName' : self.username, 'Password' : self.password, 'AuthMethod' : 'FormsAuthentication' }
-        sso_auth_response = self._make_request(self.bearer_request_url,"post",data=payload,json=False)
-        soup = BeautifulSoup(sso_auth_response.text, 'html.parser')
+        sso_auth_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(sso_auth_response, 'html.parser')
         self.context_token = soup.find('input', {'id' : 'context'})['value']
 
     def _get_bearer_token(self):
@@ -103,8 +103,8 @@ class ArmorApi:
         Completes the final request in the bearer auth method, retrieves the bearer token and sets headers required headers for API requests
         """
         payload = { 'AuthMethod' : 'AzureMfaServerAuthentication', 'Context' : self.context_token }
-        bearer_response = self._make_request(self.bearer_request_url,"post",data=payload,json=False)
-        soup = BeautifulSoup(bearer_response.text, 'html.parser')
+        bearer_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(bearer_response, 'html.parser')
         bearer = soup.find('input')['value']
         self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'Bearer %s' % bearer})
 
@@ -112,17 +112,21 @@ class ArmorApi:
         """
         performs an API request to confirm Authentication has worked, also sets the header for account ID, either as provide ID or First account ID from request
         """
-        json_response = self._make_request('https://api.armor.com/me')
+        json_response = self.make_request('https://api.armor.com/me')
         
         accountid = json_response['accounts'][0]['id'] 
         if not self.accountid and accountid:
-            self.session.headers.update({'X-Account-Context' : accountid})
+            self.session.headers.update({'X-Account-Context' : '%s' % accountid})
         elif self.accountid:
-            self.session.headers.update({'X-Account-Context' : self.accountid})
+            self.session.headers.update({'X-Account-Context' : '%s' % self.accountid})
 
     def _simulate_fail(self):
+        """
+        For testing purpoases only, creates a 401 error
+        """
+        print self.count401
         self.session = requests.session()
-        response = self._make_request('https://api.armor.com/me')
+        response = self.make_request('https://api.armor.com/me')
         print response
 
 if __name__ == "__main__":
@@ -131,3 +135,4 @@ if __name__ == "__main__":
     password = os.environ.get('armor_password')
     #accountid = os.environ.get('armor_accountid')
     armorapi = ArmorApi(username,password)
+    print armorapi.make_request('https://api.armor.com/me')
