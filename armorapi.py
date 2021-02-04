@@ -2,6 +2,7 @@
 import os
 import sys
 import traceback
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -14,20 +15,41 @@ class ArmorApi:
     Rest API client for the Armor API, access to legacy and current API authentication methods
     """    
 
-    def __init__(self,username,password,accountid=None):
+    def __init__(self,username,password,accountid=None,retries401=4):
         self.username = username
         self.password = password
         self.accountid = accountid
         self.session = requests.session()
-        self.count401 = 2       
+        self.retries401 = retries401
+        self.count401 = self.retries401
+        self.timer = time.time()
+
         self.v2_authentication()
 
     def v2_authentication(self):
         self._set_bearer_request_url()
         self._bearer_authenticate()
         self._get_bearer_token()
-        self._test_request()
-    
+        self._test_request_and_accountid()
+        self._simulate_fail()
+
+    def _401_timer(self):
+        """
+        counter method that allows n executions every 10 mintes
+        """
+        time_now = time.time()
+        if time_now - self.timer > 60:
+            #reset timer and retires if more than 10 minutes has passed since last execution 
+            self.timer = time_now
+            self.count401 = self.retries401
+
+        interval = time_now - self.timer
+        self.count401 -= 1
+        if self.count401 >= 0:
+            return True
+        else:
+            return False
+
     def _make_request(self,uri,method="get",data={},json=True):
         """
         Makes a request and returns response, catches exceptions 
@@ -42,13 +64,9 @@ class ArmorApi:
                 return response
             else:
                 return response.json()
+
         except requests.exceptions.HTTPError as error:
-            print "http error :::::::::::::::::::::::i %s" % response.status_code
-            print self.count401
-            print type(response.status_code)
-            if response.status_code == 401 and self.count401 > 0:
-                print "in the thing"
-                self.count401 -= 1
+            if response.status_code == 401 and self._401_timer():
                 self.v2_authentication()
             else:    
                 traceback.print_exc()
@@ -111,5 +129,5 @@ if __name__ == "__main__":
     
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
-    accountid = os.environ.get('armor_accountid')
-    armorapi = ArmorApi(username,password,accountid)
+    #accountid = os.environ.get('armor_accountid')
+    armorapi = ArmorApi(username,password)
