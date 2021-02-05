@@ -59,6 +59,8 @@ class ArmorApi:
                 response = self.session.get(uri,data=data)
             elif method == "post":
                 response = self.session.post(uri,data=data)
+            elif method == "put":
+                response = self.session.put(uri,data=data)
             response.raise_for_status()
             if json == False:
                 return response.text
