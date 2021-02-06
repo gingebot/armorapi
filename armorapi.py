@@ -3,6 +3,7 @@ import os
 import sys
 import traceback
 import time
+import logging
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,7 +13,7 @@ from bs4 import BeautifulSoup
 
 class ArmorApi:
     """
-    Rest API client for the Armor API, access to legacy and current API authentication methods
+    Rest API client for the Armor API, manages 0auth2 authentication.
     """    
 
     def __init__(self,username,password,accountid=None,retries401=4):
@@ -24,14 +25,13 @@ class ArmorApi:
         self.count401 = self.retries401
         self.timer = time.time()
 
-        self.v2_authentication()
+        self._v2_authentication()
 
-    def v2_authentication(self):
+    def _v2_authentication(self):
         self._set_bearer_request_url()
         self._bearer_authenticate()
         self._get_bearer_token()
         self._test_request_and_accountid()
-        #self._simulate_fail()
 
     def _401_timer(self):
         """
@@ -69,14 +69,19 @@ class ArmorApi:
 
         except requests.exceptions.HTTPError as error:
             if response.status_code == 401 and self._401_timer():
-                self.v2_authentication()
+                logging.warning(error)
+                logging.warning('Attempting reauthentication')
+                self._v2_authentication()
             else:    
+                logging.critical(error)
                 traceback.print_exc()
                 sys.exit()
         except requests.exceptions.ConnectionError as error:
+            logging.critical(error)
             traceback.print_exc()
             sys.exit()
         except requests.exceptions.RequestException as error:
+            logging.critical(error)
             traceback.print_exc()
             sys.exit()
 
@@ -137,4 +142,3 @@ if __name__ == "__main__":
     password = os.environ.get('armor_password')
     #accountid = os.environ.get('armor_accountid')
     armorapi = ArmorApi(username,password)
-    print armorapi.make_request('https://api.armor.com/me')
