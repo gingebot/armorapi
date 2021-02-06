@@ -1,4 +1,4 @@
-#!/bin/python
+#!/bin/python3
 import os
 import sys
 import traceback
@@ -131,10 +131,10 @@ class ArmorApi:
         """
         For testing purpoases only, creates a 401 error
         """
-        print self.count401
+        print(self.count401)
         self.session = requests.session()
         response = self.make_request('https://api.armor.com/me')
-        print response
+        print(response)
 
 if __name__ == "__main__":
     
