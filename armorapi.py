@@ -74,16 +74,13 @@ class ArmorApi:
                 self._v2_authentication()
             else:    
                 logging.critical(error)
-                traceback.print_exc()
-                sys.exit()
+                raise
         except requests.exceptions.ConnectionError as error:
             logging.critical(error)
-            traceback.print_exc()
-            sys.exit()
+            raise
         except requests.exceptions.RequestException as error:
             logging.critical(error)
-            traceback.print_exc()
-            sys.exit()
+            raise
 
     def _set_bearer_request_url(self):
         """
@@ -140,5 +137,4 @@ if __name__ == "__main__":
     
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
-    #accountid = os.environ.get('armor_accountid')
     armorapi = ArmorApi(username,password)
