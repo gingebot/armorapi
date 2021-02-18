@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
+logger = logging.getLogger(__name__)
 
 
 class ArmorApi:
@@ -69,17 +70,17 @@ class ArmorApi:
 
         except requests.exceptions.HTTPError as error:
             if response.status_code == 401 and self._401_timer():
-                logging.warning(error)
-                logging.warning('Attempting reauthentication')
+                logger.warning(error)
+                logger.warning('Attempting reauthentication')
                 self._v2_authentication()
             else:    
-                logging.critical(error)
+                logger.critical(error)
                 raise
         except requests.exceptions.ConnectionError as error:
-            logging.critical(error)
+            logger.critical(error)
             raise
         except requests.exceptions.RequestException as error:
-            logging.critical(error)
+            logger.critical(error)
             raise
 
     def _set_bearer_request_url(self):
@@ -137,4 +138,5 @@ if __name__ == "__main__":
     
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
+    #accountid = os.environ.get('armor_accountid')
     armorapi = ArmorApi(username,password)
