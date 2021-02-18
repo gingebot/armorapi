@@ -9,8 +9,9 @@ import requests
 from bs4 import BeautifulSoup
 
 
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class ArmorApi:
     """
@@ -25,6 +26,7 @@ class ArmorApi:
         self.retries401 = retries401
         self.count401 = self.retries401
         self.timer = time.time()
+        logger.debug('initialising armor api')
 
         self._v2_authentication()
 
@@ -98,6 +100,8 @@ class ArmorApi:
         """
         Completes the initial username/password auth and retrieve context token required for the gest bearer ID request.
         """
+        
+        logger.debug('performing initial authentication request to get context token')
         payload = { 'UserName' : self.username, 'Password' : self.password, 'AuthMethod' : 'FormsAuthentication' }
         sso_auth_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
         soup = BeautifulSoup(sso_auth_response, 'html.parser')
@@ -107,6 +111,7 @@ class ArmorApi:
         """
         Completes the final request in the bearer auth method, retrieves the bearer token and sets headers required headers for API requests
         """
+        logger.debug('performing final authentication request to get API bearer token')
         payload = { 'AuthMethod' : 'AzureMfaServerAuthentication', 'Context' : self.context_token }
         bearer_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
         soup = BeautifulSoup(bearer_response, 'html.parser')
@@ -117,12 +122,15 @@ class ArmorApi:
         """
         performs an API request to confirm Authentication has worked, also sets the header for account ID, either as provide ID or First account ID from request
         """
+        logger.debug('performing API request to test authentication and get/set account ID')
         json_response = self.make_request('https://api.armor.com/me')
         
         accountid = json_response['accounts'][0]['id'] 
         if not self.accountid and accountid:
+            logger.debug('API request successful, setting account ID to: %s' % accountid)
             self.session.headers.update({'X-Account-Context' : '%s' % accountid})
         elif self.accountid:
+            logger.debug('API request successful, however account ID already set to: %s' % self.accountid)
             self.session.headers.update({'X-Account-Context' : '%s' % self.accountid})
 
     def _simulate_fail(self):
@@ -135,7 +143,14 @@ class ArmorApi:
         print(response)
 
 if __name__ == "__main__":
-    
+
+    #set console logging for debug
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
     #accountid = os.environ.get('armor_accountid')
