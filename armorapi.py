@@ -1,25 +1,21 @@
 #!/bin/python3
 import os
-import sys
-import traceback
 import time
 import logging
 import threading
-
 import requests
 from bs4 import BeautifulSoup
-
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 class ArmorApi:
     """
     Rest API client for the Armor API, manages 0auth2 authentication.
-    """    
+    """
 
-    def __init__(self,username,password,accountid=None,retries401=4,auth='v1'):
+    def __init__(self, username, password, accountid=None, retries401=4, auth='v1'):
         self.username = username
         self.password = password
         self.accountid = accountid
@@ -53,6 +49,7 @@ class ArmorApi:
         self._v1_get_authentication_token()
         self._v1_get_authorisation_token()
         self._test_request_and_accountid()
+        self._v1_reissue_thread()
 
     def _v1_get_authentication_token(self):
         """
@@ -87,10 +84,18 @@ class ArmorApi:
         payload = { 'token' : self._authorisation_token }
         json_response = self.make_request('https://api.armor.com/auth/token/reissue', method="post", data=payload)
         logger.debug('API returned the following: %s' % json_response)
-        while self._token_lock:
+        with self._token_lock:
+            logger.debug('lock acquired to update _authorisation_token')
             self._authorisation_token = json_response.get('access_token')
             self._new_token = True
         logger.debug('Authorisation token renewed to %s' % self._authorisation_token) 
+
+    def _v1_reissue_thread(self):
+        """
+        Creates a thread to reissue token every n seconds
+        """
+        self.reissue_thread = threading.Timer(600, self._v1_reissue_authorisation_token)
+        self.reissue_thread.start()
 
     def _v2_authentication(self):
         self._token_prefix = "Bearer"
@@ -152,16 +157,23 @@ class ArmorApi:
             return True
         else:
             return False
+    def _update_authorisation_header(self):
+        """
+        updates authorisation header in a thread safe manner if you auth token is acquired
+        """
+        if self._new_token:
+            with self._token_lock:
+                logger.debug('lock acquired to update session header with new token value')
+                self.session.headers.update({ 'Authorization' : '%s %s' % (self._token_prefix, self._authorisation_token)})
+                self._new_token = False
+            logger.debug('New auth token headers updated to: %s' % self.session.headers)
 
     def make_request(self,uri,method="get",data={},json=True):
         """
         Makes a request and returns response, catches exceptions 
         """
-        if self._new_token:
-            with self._token_lock:
-                self.session.headers.update({ 'Authorization' : '%s %s' % (self._token_prefix, self._authorisation_token)})
-                self._new_token = False
-            logger.debug('New auth token headers updated to: %s' % self.session.headers)
+
+        self._update_authorisation_header()
 
         try:
             if method == "get":
@@ -228,3 +240,4 @@ if __name__ == "__main__":
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
     armorapi = ArmorApi(username,password)
+    armorapi.reissue_thread.cancel()
