@@ -4,6 +4,7 @@ import sys
 import traceback
 import time
 import logging
+import threading
 
 import requests
 from bs4 import BeautifulSoup
@@ -24,10 +25,13 @@ class ArmorApi:
         self.accountid = accountid
         self.auth = auth
         self.session = requests.session()
-        self._authorisation_token = ''
+        self.session.headers.update({ 'Accept' : 'application/json'})
         self.retries401 = retries401
         self.count401 = self.retries401
         self.timer = time.time()
+        self._authorisation_token = ''
+        self._new_token = False
+        self._token_lock = threading.Lock()
         logger.debug('initialising armor api')
 
         self._authenticate()
@@ -45,6 +49,7 @@ class ArmorApi:
             raise ValueError('Invalid auth version provided: %s' % self.auth)
 
     def _v1_authentication(self):
+        self._token_prefix = "FH-AUTH"
         self._v1_get_authentication_token()
         self._v1_get_authorisation_token()
         self._test_request_and_accountid()
@@ -67,24 +72,28 @@ class ArmorApi:
         payload = { "code":self.v1_authcode, "grant_type":"authorization_code"}
         json_response = self.make_request('https://api.armor.com/auth/token', method="post", data=payload)
         logger.debug('API returned the following: %s' % json_response)
-        self._authorisation_token = json_response.get('access_token')
-        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'FH-AUTH %s' % self._authorisation_token})
-        logger.debug('Sessions headers set to: %s ' % self.session.headers)
+        with self._token_lock:
+            logger.debug('lock acquired to update _authorisation_token')
+            self._authorisation_token = json_response.get('access_token')
+            self._new_token = True
+        logger.debug('Authorisation token set to: %s ' % self._authorisation_token)
 
     def _v1_reissue_authorisation_token(self):
         """
         v1 authorisation renew authorisation token
         """
         logger.debug('Renewing authorisation token (v1 auth)')
-        logger.debug('Sessions headers currently: %s ' % self.session.headers)
+        logger.debug('Authorisation token currently set to: %s ' % self._authorisation_token)
         payload = { 'token' : self._authorisation_token }
         json_response = self.make_request('https://api.armor.com/auth/token/reissue', method="post", data=payload)
         logger.debug('API returned the following: %s' % json_response)
-        self._authorisation_token = json_response.get('access_token')
-        self.session.headers.update({ 'Authorization' : 'FH-AUTH %s' % self._authorisation_token})
-        logger.debug('Sessions headers set to: %s ' % self.session.headers)
- 
+        while self._token_lock:
+            self._authorisation_token = json_response.get('access_token')
+            self._new_token = True
+        logger.debug('Authorisation token renewed to %s' % self._authorisation_token) 
+
     def _v2_authentication(self):
+        self._token_prefix = "Bearer"
         self._v2_set_bearer_request_url()
         self._v2_get_authentication_token()
         self._v2_get_authorisation_token()
@@ -121,7 +130,11 @@ class ArmorApi:
         bearer_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
         soup = BeautifulSoup(bearer_response, 'html.parser')
         bearer = soup.find('input')['value']
-        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'Bearer %s' % bearer})
+        with self._token_lock:
+            logger.debug('lock acquired to update _authorisation_token')
+            self._authorisation_token = bearer
+            self._new_token = True
+        logger.debug('Authorisation token set to: %s ' % self._authorisation_token)
 
     def _401_timer(self):
         """
@@ -144,6 +157,12 @@ class ArmorApi:
         """
         Makes a request and returns response, catches exceptions 
         """
+        if self._new_token:
+            with self._token_lock:
+                self.session.headers.update({ 'Authorization' : '%s %s' % (self._token_prefix, self._authorisation_token)})
+                self._new_token = False
+            logger.debug('New auth token headers updated to: %s' % self.session.headers)
+
         try:
             if method == "get":
                 response = self.session.get(uri,data=data)
