@@ -18,23 +18,110 @@ class ArmorApi:
     Rest API client for the Armor API, manages 0auth2 authentication.
     """    
 
-    def __init__(self,username,password,accountid=None,retries401=4):
+    def __init__(self,username,password,accountid=None,retries401=4,auth='v1'):
         self.username = username
         self.password = password
         self.accountid = accountid
+        self.auth = auth
         self.session = requests.session()
+        self._authorisation_token = ''
         self.retries401 = retries401
         self.count401 = self.retries401
         self.timer = time.time()
         logger.debug('initialising armor api')
 
-        self._v2_authentication()
+        self._authenticate()
 
-    def _v2_authentication(self):
-        self._set_bearer_request_url()
-        self._bearer_authenticate()
-        self._get_bearer_token()
+    def _authenticate(self):
+        """
+        Executes authentication depending on authentication version selected
+        """
+        if self.auth == 'v1':
+            self._v1_authentication()
+        elif self.auth == 'v2':
+            self._v2_authentication()
+        else:
+            logger.critical('Invalid auth version provided: %s' % self.auth)
+            raise ValueError('Invalid auth version provided: %s' % self.auth)
+
+    def _v1_authentication(self):
+        self._v1_get_authentication_token()
+        self._v1_get_authorisation_token()
         self._test_request_and_accountid()
+
+    def _v1_get_authentication_token(self):
+        """
+        1st stage v1, Perform initial authentication, to recieve authentication token
+        """
+        logger.debug('Performing initial v1 authentication to get authentication token')
+        payload = {'userName' : self.username, 'password' : self.password}
+        json_response = self.make_request('https://api.armor.com/auth/authorize',method="post", data=payload)
+        logger.debug('API returned the following: %s' % json_response)
+        self.v1_authcode = json_response.get('code')
+        
+    def _v1_get_authorisation_token(self):
+        """
+        2nd stage v1, use authentication token to get authorisation token to use on subsequent API requests
+        """
+        logger.debug('Performing 2nd stage v1 authentication, use authentication token to get authorisation token')
+        payload = { "code":self.v1_authcode, "grant_type":"authorization_code"}
+        json_response = self.make_request('https://api.armor.com/auth/token', method="post", data=payload)
+        logger.debug('API returned the following: %s' % json_response)
+        self._authorisation_token = json_response.get('access_token')
+        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'FH-AUTH %s' % self._authorisation_token})
+        logger.debug('Sessions headers set to: %s ' % self.session.headers)
+
+    def _v1_reissue_authorisation_token(self):
+        """
+        v1 authorisation renew authorisation token
+        """
+        logger.debug('Renewing authorisation token (v1 auth)')
+        logger.debug('Sessions headers currently: %s ' % self.session.headers)
+        payload = { 'token' : self._authorisation_token }
+        json_response = self.make_request('https://api.armor.com/auth/token/reissue', method="post", data=payload)
+        logger.debug('API returned the following: %s' % json_response)
+        self._authorisation_token = json_response.get('access_token')
+        self.session.headers.update({ 'Authorization' : 'FH-AUTH %s' % self._authorisation_token})
+        logger.debug('Sessions headers set to: %s ' % self.session.headers)
+ 
+    def _v2_authentication(self):
+        self._v2_set_bearer_request_url()
+        self._v2_get_authentication_token()
+        self._v2_get_authorisation_token()
+        self._test_request_and_accountid()
+
+    def _v2_set_bearer_request_url(self):
+        """
+        Sets the request url, including parameters for the bearer token request cycles
+        """
+        response_type = 'id_token'
+        response_mode = 'form_post'
+        client_id = 'b2264823-30a3-4706-bf48-4cf80dad76d3'
+        redirect_uri = 'https://amp.armor.com/'
+        client_request_id = 'f85529a0-7f20-4212-073c-0080000000a3'
+        self.bearer_request_url = 'https://sts.armor.com/adfs/oauth2/authorize?response_type=%s&response_mode=%s&client_id=%s&redirect_uri=%s' % (response_type, response_mode, client_id, redirect_uri)
+        
+    def _v2_get_authentication_token(self):
+        """
+        Completes the initial username/password auth and retrieves authentication token.
+        """
+        
+        logger.debug('Performing initial v2 authentication to get authentication token')
+        payload = { 'UserName' : self.username, 'Password' : self.password, 'AuthMethod' : 'FormsAuthentication' }
+        sso_auth_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(sso_auth_response, 'html.parser')
+        self.context_token = soup.find('input', {'id' : 'context'})['value']
+
+    def _v2_get_authorisation_token(self):
+        """
+        2nd stage v2, use authentication token to get authorisation token to use on subsequent API requests
+        """
+        logger.debug('performing final v2 authentication request to get authorisation token')
+        payload = { 'AuthMethod' : 'AzureMfaServerAuthentication', 'Context' : self.context_token }
+        bearer_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
+        soup = BeautifulSoup(bearer_response, 'html.parser')
+        bearer = soup.find('input')['value']
+        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'Bearer %s' % bearer})
 
     def _401_timer(self):
         """
@@ -42,7 +129,7 @@ class ArmorApi:
         """
         time_now = time.time()
         if time_now - self.timer > 60:
-            #reset timer and retires if more than 10 minutes has passed since last execution 
+            #reset timer and retries if more than 10 minutes has passed since last execution 
             self.timer = time_now
             self.count401 = self.retries401
 
@@ -74,7 +161,7 @@ class ArmorApi:
             if response.status_code == 401 and self._401_timer():
                 logger.warning(error)
                 logger.warning('Attempting reauthentication')
-                self._v2_authentication()
+                self._authenticate()
             else:    
                 logger.critical(error)
                 raise
@@ -85,38 +172,6 @@ class ArmorApi:
             logger.critical(error)
             raise
 
-    def _set_bearer_request_url(self):
-        """
-        Sets the request url, including parameters for the bearer token request cycles
-        """
-        response_type = 'id_token'
-        response_mode = 'form_post'
-        client_id = 'b2264823-30a3-4706-bf48-4cf80dad76d3'
-        redirect_uri = 'https://amp.armor.com/'
-        client_request_id = 'f85529a0-7f20-4212-073c-0080000000a3'
-        self.bearer_request_url = 'https://sts.armor.com/adfs/oauth2/authorize?response_type=%s&response_mode=%s&client_id=%s&redirect_uri=%s' % (response_type, response_mode, client_id, redirect_uri)
-        
-    def _bearer_authenticate(self):
-        """
-        Completes the initial username/password auth and retrieve context token required for the gest bearer ID request.
-        """
-        
-        logger.debug('performing initial authentication request to get context token')
-        payload = { 'UserName' : self.username, 'Password' : self.password, 'AuthMethod' : 'FormsAuthentication' }
-        sso_auth_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
-        soup = BeautifulSoup(sso_auth_response, 'html.parser')
-        self.context_token = soup.find('input', {'id' : 'context'})['value']
-
-    def _get_bearer_token(self):
-        """
-        Completes the final request in the bearer auth method, retrieves the bearer token and sets headers required headers for API requests
-        """
-        logger.debug('performing final authentication request to get API bearer token')
-        payload = { 'AuthMethod' : 'AzureMfaServerAuthentication', 'Context' : self.context_token }
-        bearer_response = self.make_request(self.bearer_request_url,"post",data=payload,json=False)
-        soup = BeautifulSoup(bearer_response, 'html.parser')
-        bearer = soup.find('input')['value']
-        self.session.headers.update({ 'Accept' : 'application/json', 'Authorization' : 'Bearer %s' % bearer})
 
     def _test_request_and_accountid(self):
         """
@@ -153,5 +208,4 @@ if __name__ == "__main__":
 
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
-    #accountid = os.environ.get('armor_accountid')
     armorapi = ArmorApi(username,password)
