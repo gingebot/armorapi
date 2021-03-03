@@ -139,7 +139,7 @@ class ArmorApi:
         counter method that allows n executions every 10 mintes
         """
         time_now = time.time()
-        if time_now - self.timer > 60:
+        if time_now - self.timer > 600:
             # reset timer and retries if more than 10 minutes has passed since last execution
             self.timer = time_now
             self.count401 = self.retries401
@@ -152,7 +152,7 @@ class ArmorApi:
 
     def _update_authorisation_header(self):
         """
-        updates authorisation header in a thread safe manner if you auth token is acquired
+        updates authorisation header in a thread safe manner if an auth token is acquired
         """
         if self._new_token:
             with self._token_lock:
