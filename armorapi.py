@@ -76,7 +76,7 @@ class ArmorApi:
             self._new_token = True
         logger.debug('Authorisation token set to: %s ' % self._authorisation_token)
 
-    def _v1_reissue_authorisation_token(self):
+    def v1_reissue_authorisation_token(self):
         """
         v1 authorisation renew authorisation token
         """
@@ -140,7 +140,6 @@ class ArmorApi:
         """
         time_now = time.time()
         if time_now - self.timer > 600:
-            # reset timer and retries if more than 10 minutes has passed since last execution
             self.timer = time_now
             self.count401 = self.retries401
 
@@ -210,26 +209,3 @@ class ArmorApi:
         elif self.accountid:
             logger.debug('API request successful, however account ID already set to: %s' % self.accountid)
             self.session.headers.update({'X-Account-Context': '%s' % self.accountid})
-
-    def _simulate_fail(self):
-        """
-        For testing purpoases only, creates a 401 error
-        """
-        print(self.count401)
-        self.session = requests.session()
-        response = self.make_request('https://api.armor.com/me')
-        print(response)
-
-
-if __name__ == '__main__':
-
-    # set console logging for debug
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    username = os.environ.get('armor_username')
-    password = os.environ.get('armor_password')
-    armorapi = ArmorApi(username, password)
