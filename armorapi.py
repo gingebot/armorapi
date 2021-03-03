@@ -50,7 +50,6 @@ class ArmorApi:
         self._v1_get_authentication_token()
         self._v1_get_authorisation_token()
         self._test_request_and_accountid()
-        self._v1_reissue_thread()
 
     def _v1_get_authentication_token(self):
         """
@@ -91,13 +90,6 @@ class ArmorApi:
             self._authorisation_token = json_response.get('access_token')
             self._new_token = True
         logger.debug('Authorisation token renewed to %s' % self._authorisation_token)
-
-    def _v1_reissue_thread(self):
-        """
-        Creates a thread to reissue token every n seconds
-        """
-        self.reissue_thread = threading.Timer(600, self._v1_reissue_authorisation_token)
-        self.reissue_thread.start()
 
     def _v2_authentication(self):
         self._token_prefix = 'Bearer'
@@ -241,4 +233,3 @@ if __name__ == '__main__':
     username = os.environ.get('armor_username')
     password = os.environ.get('armor_password')
     armorapi = ArmorApi(username, password)
-    armorapi.reissue_thread.cancel()
