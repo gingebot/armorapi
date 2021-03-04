@@ -15,17 +15,17 @@ class ArmorApi:
     Rest API client for the Armor API, manages 0auth2 authentication.
     """
 
-    def __init__(self, username, password,
+    def __init__(self,username,password,
                  accountid=None, retries401=4, auth='v1'):
-        self.username = username
-        self.password = password
+        self._username =username
+        self._password =password
         self.accountid = accountid
-        self.auth = auth
-        self.session = requests.session()
-        self.session.headers.update({'Accept': 'application/json'})
-        self.retries401 = retries401
-        self.count401 = self.retries401
-        self.timer = time.time()
+        self._auth = auth
+        self._session = requests.session()
+        self._session.headers.update({'Accept': 'application/json'})
+        self._retries401 = retries401
+        self._count401 = self._retries401
+        self._timer = time.time()
         self._authorisation_token = ''
         self._new_token = False
         self._token_lock = threading.Lock()
@@ -37,13 +37,13 @@ class ArmorApi:
         """
         Executes authentication depending on authentication version selected
         """
-        if self.auth == 'v1':
+        if self._auth == 'v1':
             self._v1_authentication()
-        elif self.auth == 'v2':
+        elif self._auth == 'v2':
             self._v2_authentication()
         else:
-            logger.critical('Invalid auth version provided: %s' % self.auth)
-            raise ValueError('Invalid auth version provided: %s' % self.auth)
+            logger.critical('Invalid auth version provided: %s' % self._auth)
+            raise ValueError('Invalid auth version provided: %s' % self._auth)
 
     def _v1_authentication(self):
         self._token_prefix = 'FH-AUTH'
@@ -57,7 +57,7 @@ class ArmorApi:
         to recieve authentication token
         """
         logger.debug('Performing initial v1 authentication to get authentication token')
-        payload = {'userName': self.username, 'password': self.password}
+        payload = {'userName': self._username, 'password': self._password}
         json_response = self.make_request('https://api.armor.com/auth/authorize', method="post", data=payload)
         logger.debug('API returned the following: %s' % json_response)
         self.v1_authcode = json_response.get('code')
@@ -114,7 +114,7 @@ class ArmorApi:
         """
 
         logger.debug('Performing initial v2 authentication to get authentication token')
-        payload = {'UserName': self.username, 'Password': self.password, 'AuthMethod': 'FormsAuthentication'}
+        payload = {'UserName': self._username, 'Password': self._password, 'AuthMethod': 'FormsAuthentication'}
         sso_auth_response = self.make_request(self.bearer_request_url, 'post', data=payload, json=False)
         soup = BeautifulSoup(sso_auth_response, 'html.parser')
         self.context_token = soup.find('input', {'id': 'context'})['value']
@@ -139,12 +139,12 @@ class ArmorApi:
         counter method that allows n executions every 10 mintes
         """
         time_now = time.time()
-        if time_now - self.timer > 600:
-            self.timer = time_now
-            self.count401 = self.retries401
+        if time_now - self._timer > 600:
+            self._timer = time_now
+            self._count401 = self._retries401
 
-        self.count401 -= 1
-        if self.count401 >= 0:
+        self._count401 -= 1
+        if self._count401 >= 0:
             return True
         else:
             return False
@@ -156,9 +156,9 @@ class ArmorApi:
         if self._new_token:
             with self._token_lock:
                 logger.debug('lock acquired to update session header with new token value')
-                self.session.headers.update({'Authorization': '%s %s' % (self._token_prefix, self._authorisation_token)})
+                self._session.headers.update({'Authorization': '%s %s' % (self._token_prefix, self._authorisation_token)})
                 self._new_token = False
-            logger.debug('New auth token headers updated to: %s' % self.session.headers)
+            logger.debug('New auth token headers updated to: %s' % self._session.headers)
 
     def make_request(self, uri, method='get', data={}, json=True):
         """
@@ -169,11 +169,11 @@ class ArmorApi:
 
         try:
             if method == 'get':
-                response = self.session.get(uri, data=data)
+                response = self._session.get(uri, data=data)
             elif method == 'post':
-                response = self.session.post(uri, data=data)
+                response = self._session.post(uri, data=data)
             elif method == 'put':
-                response = self.session.put(uri, data=data)
+                response = self._session.put(uri, data=data)
             response.raise_for_status()
             if json is False:
                 return response.text
@@ -205,7 +205,7 @@ class ArmorApi:
         accountid = json_response['accounts'][0]['id']
         if not self.accountid and accountid:
             logger.debug('API request successful, setting account ID to: %s' % accountid)
-            self.session.headers.update({'X-Account-Context': '%s' % accountid})
+            self._session.headers.update({'X-Account-Context': '%s' % accountid})
         elif self.accountid:
             logger.debug('API request successful, however account ID already set to: %s' % self.accountid)
-            self.session.headers.update({'X-Account-Context': '%s' % self.accountid})
+            self._session.headers.update({'X-Account-Context': '%s' % self.accountid})

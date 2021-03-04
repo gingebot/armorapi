@@ -22,7 +22,7 @@ def test_accountid_invocation():
     print('*** TESTING BASIC INVOCATION WITH ACCOUNT ID:\n')
     armorapi = ArmorApi(username, password, accountid='007')
     
-    assert armorapi.session.headers['X-Account-Context'] == '007', 'X-Account-Context header incorrectly set to %s' % armorapi.session.headers['X-Account-Context']
+    assert armorapi._session.headers['X-Account-Context'] == '007', 'X-Account-Context header incorrectly set to %s' % armorapi.session.headers['X-Account-Context']
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -36,7 +36,7 @@ def test_explicit_v1_auth_invocation():
 
 def test_explicit_v2_auth_invocation():
     print('\n----------------- TEST START --------------------\n')
-    print('*** TESTING EXPLICIT V1 AUTH INVOCATION :\n')
+    print('*** TESTING EXPLICIT V2 AUTH INVOCATION :\n')
     armorapi = ArmorApi(username, password, auth='v2')
 
     print('\n----------------- TEST COMPLETE -----------------\n')
@@ -46,13 +46,13 @@ def test_401_timer():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING 401 TIMER :\n')
     armorapi = ArmorApi(username, password, retries401=2)
-    assert armorapi.count401 == 2, 'initial 401 count doesn\'t match retries401 provided'
+    assert armorapi._count401 == 2, 'initial 401 count doesn\'t match retries401 provided'
     armorapi._authorisation_token = 'NOTAVALIDTOKEN'
     armorapi._new_token = True
     try:
         armorapi._test_request_and_accountid()
     except requests.exceptions.HTTPError:
-        assert armorapi.count401 < 0, '401 count has decremented below 0 before exception, value is: %s' % armorapi.count401
+        assert armorapi._count401 < 0, '401 count has decremented below 0 before exception, value is: %s' % armorapi.count401
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -61,10 +61,10 @@ def test_v1_token_reissue():
     print('*** TESTING v1 AUTH TOKEN REISSUE :\n')
     
     armorapi = ArmorApi(username, password, auth='v1')
-    auth_token = armorapi.session.headers['Authorization']
+    auth_token = armorapi._session.headers['Authorization']
     armorapi.v1_reissue_authorisation_token()
     armorapi._test_request_and_accountid()
-    auth_token_new = armorapi.session.headers['Authorization']   
+    auth_token_new = armorapi._session.headers['Authorization']   
     assert armorapi != auth_token_new, 'Auth token has not been udpated'
 
     print('\n----------------- TEST COMPLETE -----------------\n')
