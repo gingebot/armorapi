@@ -29,7 +29,7 @@ def test_accountid_invocation():
 def test_explicit_v1_auth_invocation():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING EXPLICIT V1 AUTH INVOCATION :\n')
-    armorapi = ArmorApi(username, password, auth='v1')
+    armorapi = ArmorApi(username, password, auth=1)
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -37,7 +37,7 @@ def test_explicit_v1_auth_invocation():
 def test_explicit_v2_auth_invocation():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING EXPLICIT V2 AUTH INVOCATION :\n')
-    armorapi = ArmorApi(username, password, auth='v2')
+    armorapi = ArmorApi(username, password, auth=1)
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -56,11 +56,22 @@ def test_401_timer():
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
+def test_retries401_sanitisation():
+    print('\n----------------- TEST START --------------------\n')
+    print('*** TESTING RETRIES401 SANITISATOIN :\n')
+    try:
+        armorapi = ArmorApi(username, password, retries401=101)
+        print('\n********************* TEST FAILED **************************\n')
+    except:
+        print('\n********************* TEST PASS ****************************\n')
+
+    print('\n----------------- TEST COMPLETE -----------------\n')
+
 def test_v1_token_reissue():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING v1 AUTH TOKEN REISSUE :\n')
     
-    armorapi = ArmorApi(username, password, auth='v1')
+    armorapi = ArmorApi(username, password, auth=1)
     auth_token = armorapi._session.headers['Authorization']
     armorapi.v1_reissue_authorisation_token()
     armorapi._test_request_and_accountid()
@@ -79,6 +90,7 @@ if __name__ == '__main__':
     test_basic_invocation()
     test_accountid_invocation()
     test_explicit_v1_auth_invocation()
-    test_explicit_v2_auth_invocation()
+    #test_explicit_v2_auth_invocation()
     test_401_timer()
     test_v1_token_reissue()
+    test_retries401_sanitisation()

@@ -16,30 +16,50 @@ class ArmorApi:
     """
 
     def __init__(self,username,password,
-                 accountid=None, retries401=4, auth='v1'):
-        self._username =username
-        self._password =password
+                 accountid=None, retries401=4, auth=1):
         self.accountid = accountid
         self._auth = auth
         self._session = requests.session()
         self._session.headers.update({'Accept': 'application/json'})
-        self._retries401 = retries401
-        self._count401 = self._retries401
         self._timer = time.time()
         self._authorisation_token = ''
         self._new_token = False
         self._token_lock = threading.Lock()
         logger.debug('initialising armor api')
-
+        
+        self._sanitise_creds(username,password)
+        self._sanitise_retries401(retries401)
         self._authenticate()
+
+    def _sanitise_creds(self,username,password):
+        """
+        sanitises credentials before making them members
+        """
+        if len(password) > 512 or len(username) > 512:
+            logger.critical('username and/or password greater than 512 characters')
+            raise ValueError('username and/or password greater than 512 characters')
+        else:
+            self._username = username
+            self._password = password
+
+    def _sanitise_retries401(self,retries401):
+        """
+        sanitises retires401 input before making it a member
+        """
+        if isinstance(retries401, int) and 1 <= retries401 <=100:
+            self._retries401 = retries401
+            self._count401 = self._retries401
+        else:
+            logger.critical('retries401 must be an integer between 1 and 100, the following was provided: %s' % retries401)
+            raise ValueError('retries401 must be an integer between 1 and 100, the following was provided: %s' % retries401)
 
     def _authenticate(self):
         """
         Executes authentication depending on authentication version selected
         """
-        if self._auth == 'v1':
+        if self._auth == 1:
             self._v1_authentication()
-        elif self._auth == 'v2':
+        elif self._auth == 2:
             self._v2_authentication()
         else:
             logger.critical('Invalid auth version provided: %s' % self._auth)
