@@ -80,6 +80,13 @@ def test_v1_token_reissue():
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
+def test_make_request_sanitisation():
+    print('\n----------------- TEST START --------------------\n')
+    print('*** TESTING MAKE REQUEST SANITISATION :\n')
+    
+    armorapi = ArmorApi(username, password, auth=1)
+
+
 if __name__ == '__main__':
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)

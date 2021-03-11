@@ -186,14 +186,18 @@ class ArmorApi:
         """
 
         self._update_authorisation_header()
-
+        method = method.upper()
         try:
-            if method == 'get':
+            if method == 'GET':
                 response = self._session.get(uri, data=data)
-            elif method == 'post':
+            elif method == 'POST':
                 response = self._session.post(uri, data=data)
-            elif method == 'put':
+            elif method == 'PUT':
                 response = self._session.put(uri, data=data)
+            else:
+                logger.critical('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        
+                raise ValueError('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        
+
             response.raise_for_status()
             if json is False:
                 return response.text
