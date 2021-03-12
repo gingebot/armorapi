@@ -3,6 +3,7 @@ import os
 import time
 import logging
 import threading
+import re
 import requests
 from bs4 import BeautifulSoup
 
@@ -25,6 +26,7 @@ class ArmorApi:
         self._authorisation_token = ''
         self._new_token = False
         self._token_lock = threading.Lock()
+        self._domain_whitelist = ['amp.armor.com', 'sts.armor.com', 'api.armor.com', 'api.accounts.armor.com', 'agent-management.api.armor.com', 'security-detections.api.secure-prod.services', 'compliance.api.secure-prod.services', 'api.logs.armor.com', 'api.notifications.armor.com', 'webhooks.api.secure-prod.services']
         logger.debug('initialising armor api')
         
         self._sanitise_creds(username,password)
@@ -180,20 +182,30 @@ class ArmorApi:
                 self._new_token = False
             logger.debug('New auth token headers updated to: %s' % self._session.headers)
 
-    def make_request(self, uri, method='get', data={}, json=True):
+    def _validate_url(self,url):
+        """
+        performs validation on a url to config domain is in the API whitelist
+        """
+        fqdn = re.findall('^(?:http.+?/+)*(.+?)(?:/.*)*$', url)[0]
+        if fqdn not in self._domain_whitelist:
+            logger.critical('domain: %s not on api whitelist' % fqdn)
+            raise ValueError('domain: %s not on api whitelist' % fqdn)
+
+    def make_request(self, url, method='get', data={}, json=True):
         """
         Makes a request and returns response, catches exceptions
         """
 
+        self._validate_url(url)
         self._update_authorisation_header()
         method = method.upper()
         try:
             if method == 'GET':
-                response = self._session.get(uri, data=data)
+                response = self._session.get(url, data=data)
             elif method == 'POST':
-                response = self._session.post(uri, data=data)
+                response = self._session.post(url, data=data)
             elif method == 'PUT':
-                response = self._session.put(uri, data=data)
+                response = self._session.put(url, data=data)
             else:
                 logger.critical('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        
                 raise ValueError('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        

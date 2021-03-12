@@ -37,7 +37,7 @@ def test_explicit_v1_auth_invocation():
 def test_explicit_v2_auth_invocation():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING EXPLICIT V2 AUTH INVOCATION :\n')
-    armorapi = ArmorApi(username, password, auth=1)
+    armorapi = ArmorApi(username, password, auth=2)
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -83,9 +83,14 @@ def test_v1_token_reissue():
 def test_make_request_sanitisation():
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING MAKE REQUEST SANITISATION :\n')
-    
-    armorapi = ArmorApi(username, password, auth=1)
+    try: 
+        armorapi = ArmorApi(username, password, auth=1)
+        armorapi.make_request('https://google.com')
+        print('\n********************* TEST FAILED **************************\n')
+    except:
+        print('\n********************* TEST PASS ****************************\n')
 
+    print('\n----------------- TEST COMPLETE -----------------\n')
 
 if __name__ == '__main__':
     handler = logging.StreamHandler()
@@ -97,7 +102,8 @@ if __name__ == '__main__':
     test_basic_invocation()
     test_accountid_invocation()
     test_explicit_v1_auth_invocation()
-    #test_explicit_v2_auth_invocation()
+    test_explicit_v2_auth_invocation()
     test_401_timer()
     test_v1_token_reissue()
     test_retries401_sanitisation()
+    test_make_request_sanitisation()
