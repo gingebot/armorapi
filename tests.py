@@ -16,15 +16,19 @@ def test_basic_invocation():
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
-def test_accountid_invocation():
+def test_accountid_sanitisation():
 
     print('\n----------------- TEST START --------------------\n')
-    print('*** TESTING BASIC INVOCATION WITH ACCOUNT ID:\n')
-    armorapi = ArmorApi(username, password, accountid='007')
-    
-    assert armorapi._session.headers['X-Account-Context'] == '007', 'X-Account-Context header incorrectly set to %s' % armorapi.session.headers['X-Account-Context']
+    print('*** TESTING INVOCATION WITH INVLAID ACCOUNT ID:\n')
+    try:
+        armorapi = ArmorApi(username, password, accountid='007')
+        print('\n********************* TEST FAILED **************************\n')
+    except:
+        print('\n********************* TEST PASS ****************************\n')
 
     print('\n----------------- TEST COMPLETE -----------------\n')
+   
+
 
 def test_explicit_v1_auth_invocation():
     print('\n----------------- TEST START --------------------\n')
@@ -100,10 +104,10 @@ if __name__ == '__main__':
     logger.addHandler(handler)
     set_creds()
     test_basic_invocation()
-    test_accountid_invocation()
     test_explicit_v1_auth_invocation()
     test_explicit_v2_auth_invocation()
     test_401_timer()
     test_v1_token_reissue()
     test_retries401_sanitisation()
     test_make_request_sanitisation()
+    test_accountid_sanitisation()

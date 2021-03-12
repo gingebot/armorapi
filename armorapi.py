@@ -237,11 +237,15 @@ class ArmorApi:
         """
         logger.debug('performing API request to test authentication and get/set account ID')
         json_response = self.make_request('https://api.armor.com/me')
-
+        
+        accountids = [x['id'] for x in json_response['accounts']]
         accountid = json_response['accounts'][0]['id']
         if not self.accountid and accountid:
             logger.debug('API request successful, setting account ID to: %s' % accountid)
             self._session.headers.update({'X-Account-Context': '%s' % accountid})
         elif self.accountid:
+            if self.accountid not in accountids:
+                 logger.critical('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
+                 raise ValueError('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
             logger.debug('API request successful, however account ID already set to: %s' % self.accountid)
             self._session.headers.update({'X-Account-Context': '%s' % self.accountid})
