@@ -1,5 +1,6 @@
 #!/bin/python3
-import os, logging
+import os, logging, sys
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../../src")
 from armorapi import *
 
 def set_creds():

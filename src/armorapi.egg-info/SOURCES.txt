@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+setup.cfg
+src/armorapi/__init__.py
+src/armorapi.egg-info/PKG-INFO
+src/armorapi.egg-info/SOURCES.txt
+src/armorapi.egg-info/dependency_links.txt
+src/armorapi.egg-info/requires.txt
+src/armorapi.egg-info/top_level.txt
