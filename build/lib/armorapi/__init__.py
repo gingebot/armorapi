@@ -4,10 +4,12 @@ import time
 import logging
 import threading
 import re
+import json
 import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 logger.setLevel(logging.DEBUG)
 
 
@@ -20,13 +22,13 @@ class ArmorApi:
                  accountid=None, retries401=4, auth=1):
         self.accountid = accountid
         self._auth = auth
-        self._session = requests.session()
-        self._session.headers.update({'Accept': 'application/json'})
+        self.session = requests.session()
+        self.session.headers.update({'Accept': 'application/json', 'Content-Type': 'application/json'})
         self._timer = time.time()
         self._authorisation_token = ''
         self._new_token = False
         self._token_lock = threading.Lock()
-        self._domain_whitelist = ['amp.armor.com', 'sts.armor.com', 'api.armor.com', 'api.accounts.armor.com', 'agent-management.api.armor.com', 'security-detections.api.secure-prod.services', 'compliance.api.secure-prod.services', 'api.logs.armor.com', 'api.notifications.armor.com', 'webhooks.api.secure-prod.services']
+        self._domain_whitelist = ['amp.armor.com', 'sts.armor.com', 'api.armor.com', 'api.accounts.armor.com', 'agent-management.api.armor.com', 'security-detections.api.secure-prod.services', 'compliance.api.secure-prod.services', 'api.logs.armor.com', 'api.notifications.armor.com', 'webhooks.api.secure-prod.services', 'logs.api.secure-prod.services']
         logger.debug('initialising armor api')
         
         self._sanitise_creds(username,password)
@@ -80,9 +82,9 @@ class ArmorApi:
         """
         logger.debug('Performing initial v1 authentication to get authentication token')
         payload = {'userName': self._username, 'password': self._password}
-        json_response = self.make_request('https://api.armor.com/auth/authorize', method="post", data=payload)
-        logger.debug('API returned the following: %s' % json_response)
-        self.v1_authcode = json_response.get('code')
+        response = self.make_request('https://api.armor.com/auth/authorize', method="post", data=payload)
+        logger.debug('API returned the following: %s' % response.json())
+        self.v1_authcode = response.json().get('code')
 
     def _v1_get_authorisation_token(self):
         """
@@ -90,11 +92,11 @@ class ArmorApi:
         """
         logger.debug('Performing 2nd stage v1 authentication, use authentication token to get authorisation token')
         payload = {'code': self.v1_authcode, 'grant_type': 'authorization_code'}
-        json_response = self.make_request('https://api.armor.com/auth/token', method='post', data=payload)
-        logger.debug('API returned the following: %s' % json_response)
+        response = self.make_request('https://api.armor.com/auth/token', method='post', data=payload)
+        logger.debug('API returned the following: %s' % response.json())
         with self._token_lock:
             logger.debug('lock acquired to update _authorisation_token')
-            self._authorisation_token = json_response.get('access_token')
+            self._authorisation_token = response.json().get('access_token')
             self._new_token = True
         logger.debug('Authorisation token set to: %s ' % self._authorisation_token)
 
@@ -105,11 +107,11 @@ class ArmorApi:
         logger.debug('Renewing authorisation token (v1 auth)')
         logger.debug('Authorisation token currently set to: %s ' % self._authorisation_token)
         payload = {'token': self._authorisation_token}
-        json_response = self.make_request('https://api.armor.com/auth/token/reissue', method='post', data=payload)
-        logger.debug('API returned the following: %s' % json_response)
+        response = self.make_request('https://api.armor.com/auth/token/reissue', method='post', data=payload)
+        logger.debug('API returned the following: %s' % response.json())
         with self._token_lock:
             logger.debug('lock acquired to update _authorisation_token')
-            self._authorisation_token = json_response.get('access_token')
+            self._authorisation_token = response.json().get('access_token')
             self._new_token = True
         logger.debug('Authorisation token renewed to %s' % self._authorisation_token)
 
@@ -137,8 +139,8 @@ class ArmorApi:
 
         logger.debug('Performing initial v2 authentication to get authentication token')
         payload = {'UserName': self._username, 'Password': self._password, 'AuthMethod': 'FormsAuthentication'}
-        sso_auth_response = self.make_request(self.bearer_request_url, 'post', data=payload, json=False)
-        soup = BeautifulSoup(sso_auth_response, 'html.parser')
+        sso_auth_response = self.session.post(self.bearer_request_url, data=payload)
+        soup = BeautifulSoup(sso_auth_response.text, 'html.parser')
         self.context_token = soup.find('input', {'id': 'context'})['value']
 
     def _v2_get_authorisation_token(self):
@@ -147,8 +149,8 @@ class ArmorApi:
         """
         logger.debug('performing final v2 authentication request to get authorisation token')
         payload = {'AuthMethod': 'AzureMfaServerAuthentication', 'Context': self.context_token}
-        bearer_response = self.make_request(self.bearer_request_url, 'post', data=payload, json=False)
-        soup = BeautifulSoup(bearer_response, 'html.parser')
+        bearer_response = self.session.post(self.bearer_request_url, data=payload)
+        soup = BeautifulSoup(bearer_response.text, 'html.parser')
         bearer = soup.find('input')['value']
         with self._token_lock:
             logger.debug('lock acquired to update _authorisation_token')
@@ -178,9 +180,9 @@ class ArmorApi:
         if self._new_token:
             with self._token_lock:
                 logger.debug('lock acquired to update session header with new token value')
-                self._session.headers.update({'Authorization': '%s %s' % (self._token_prefix, self._authorisation_token)})
+                self.session.headers.update({'Authorization': '%s %s' % (self._token_prefix, self._authorisation_token)})
                 self._new_token = False
-            logger.debug('New auth token headers updated to: %s' % self._session.headers)
+            logger.debug('New auth token headers updated to: %s' % self.session.headers)
 
     def _validate_url(self,url):
         """
@@ -191,7 +193,7 @@ class ArmorApi:
             logger.critical('domain: %s not on api whitelist' % fqdn)
             raise ValueError('domain: %s not on api whitelist' % fqdn)
 
-    def make_request(self, url, method='get', data={}, json=True):
+    def make_request(self, url, method='get', data={}, headers={}):
         """
         Makes a request and returns response, catches exceptions
         """
@@ -201,20 +203,18 @@ class ArmorApi:
         method = method.upper()
         try:
             if method == 'GET':
-                response = self._session.get(url, data=data)
+                response = self.session.get(url, data=json.dumps(data), headers=headers)
             elif method == 'POST':
-                response = self._session.post(url, data=data)
+                response = self.session.post(url, data=json.dumps(data), headers=headers)
             elif method == 'PUT':
-                response = self._session.put(url, data=data)
+                response = self.session.put(url, data=json.dumps(data), headers=headers)
             else:
                 logger.critical('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        
                 raise ValueError('Only GET, POST and PUT are valid make_request methods. %s was provided' % method)        
 
             response.raise_for_status()
-            if json is False:
-                return response.text
-            else:
-                return response.json()
+
+            return response
 
         except requests.exceptions.HTTPError as error:
             if response.status_code == 401 and self._401_timer():
@@ -236,16 +236,17 @@ class ArmorApi:
         performs an API request to confirm Authentication has worked, also sets the header for account ID, either as provide ID or First account ID from request
         """
         logger.debug('performing API request to test authentication and get/set account ID')
-        json_response = self.make_request('https://api.armor.com/me')
+        response = self.make_request('https://api.armor.com/me')
+        json_response = response.json()
         
         accountids = [x['id'] for x in json_response['accounts']]
         accountid = json_response['accounts'][0]['id']
         if not self.accountid and accountid:
             logger.debug('API request successful, setting account ID to: %s' % accountid)
-            self._session.headers.update({'X-Account-Context': '%s' % accountid})
+            self.session.headers.update({'X-Account-Context': '%s' % accountid})
         elif self.accountid:
             if self.accountid not in accountids:
                  logger.critical('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
                  raise ValueError('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
             logger.debug('API request successful, however account ID already set to: %s' % self.accountid)
-            self._session.headers.update({'X-Account-Context': '%s' % self.accountid})
+            self.session.headers.update({'X-Account-Context': '%s' % self.accountid})

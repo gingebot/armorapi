@@ -1,1 +1,104 @@
-Python module for interacting with the Armor API.
+# Armor Python API Auth wrapper
+## What is it
+This package provides a simple python interface for interacting with the [Armor.com API](https://developer.armor.com/). It provides a simple mechanism for authentication and making API requests. Specific API requests are down to the developer, this package simply provides authentication mechanisms and the means to make requests.
+## Installation
+From PyPi
+`$ pip install armorapi`
+## Use
+### Authentication
+The package provides both v1 and v2 authentication. v1 authentication is the default method. v2 authentication requires MFA, v1 does NOT.
+
+*v1 authentication*
+```python
+from armorapi import *
+aa = ArmorApi(username,password)
+```
+
+*v2 authentication*
+```python
+from armorapi import *
+aa = ArmorApi(username,password,auth=2)
+```
+
+v1 authorisation tokens are valid for 15 minutes, the api object provides a simple means to reissue a token, this updates the authorisation token value to be sent with the next request:
+```python
+aa.v1_reissue_authorisation_token()
+```
+
+Reissuing of tokens is performed in a thread safe manner, therefore v1 token reissue can be set in a separate threading.timer thread for a seamless update process (in the case of this example every 10 minutes):
+```python
+import threading
+from armorapi import *
+aa = ArmorApi(username,password,auth=2)
+
+timer = threading.timer(600, a.v1_reissue_authorisation_token)
+timer.start()
+```
+
+V2 authentication doesn't have a token reissue mechanism.
+
+The api object handles by default 4 authentication failures every 10 minutes, i.e. if a 401 http response code is returned it will attempt to reauthenticate, but will only do this in 4 times in a 10 minute period before causing an exception. The number of attempts before exception in a 10 minute period can be set as desired:
+```python
+from armorapi import *
+aa = ArmorApi(username,password, retries401=8)
+```
+
+### Account IDs
+By default the api object will use the first Armor account ID assigned to the user authenticating without the user needing to set and account ID. In many cases this will be fine as generally users are only assigned to one account, but in cases where a user has multiple accounts a specific account can be selected at instantiation:
+```python
+from armorapi import *
+aa = ArmorApi(username,password, accountid='<account_id>')
+```
+
+### api requests
+The api object has the public method 'make_request' available, intended for making api requests
+```python
+from armorapi import *
+aa = ArmorApi(username,password)
+response = aa.make_request('https://api.armor.com/me')
+```
+
+make_request performs a GET request by default, POST and PUT are also available methods, post and put requests accept a data input of json like data made up of dictionaries and/or lists.
+```python
+from armorapi import *
+aa = ArmorApi(username,password)
+response = aa.make_request('https://api.armor.com/me', method='POST', data={'key': 'value', 'key2': 'value2'})
+```
+
+### HTTP Headers and more
+Although the api object sets account and authorisation headers, many API requests rely on custom http headers in both the request and response. the api object levarages the python requests module, specifically a [requests session](https://requests.readthedocs.io/en/master/user/advanced/#session-objects). All requests session methods and members are available for use, see the requests doucmentation for further advance use.
+https headers can be added at the session level so the header persists across requests:
+```python
+from armorapi import *
+aa = ArmorApi(username,password)
+aa.session.headers.update({'Range': 'entities=0-10; max=10'})
+```
+
+If a header value is only needed for a single request dict type values can be passed with make_request method, the values will be merged with the session-level values that are set. The method-level parameters override session parameters. Method-level parameters will not be persisted across requests:
+```python
+from armorapi import *
+aa = ArmorApi(username,password)
+response = aa.make_request('https://api.armor.com/me', headers={'Range': 'entities=0-10; max=10'})
+```
+`
+### api responses
+Returned responses are [requests.Response](https://requests.readthedocs.io/en/latest/api/#requests.Response) objects, please see the linked requests documentation for full details, however key features are:
+* [Response.json()](https://requests.readthedocs.io/en/latest/api/#requests.Response.json) returns the json encoded content of the response.
+* [Response.headers](https://requests.readthedocs.io/en/latest/api/#requests.Response.headers) a dict of response headers.
+
+```python
+from pprint import pprint
+from armorapi import *
+aa = ArmorApi(username,password)
+response = aa.make_request('https://api.armor.com/me')
+response.headers
+    {'Content-Length': '1221', 'Content-Type': 'application/json; charset=utf-8', 'Server': 'Microsoft-HTTPAPI/2.0'}
+pprint(response.json())
+    {'accounts': [{'accountType': 'Direct',
+               'currency': 'USD       ',
+               'id': 0007,
+               'isSynced': True,
+               'name': 'Documentation Example Account',
+               'parent': 1,
+                ....
+```

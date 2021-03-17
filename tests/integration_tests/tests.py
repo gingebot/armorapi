@@ -77,10 +77,10 @@ def test_v1_token_reissue():
     print('*** TESTING v1 AUTH TOKEN REISSUE :\n')
     
     armorapi = ArmorApi(username, password, auth=1)
-    auth_token = armorapi._session.headers['Authorization']
+    auth_token = armorapi.session.headers['Authorization']
     armorapi.v1_reissue_authorisation_token()
     armorapi._test_request_and_accountid()
-    auth_token_new = armorapi._session.headers['Authorization']   
+    auth_token_new = armorapi.session.headers['Authorization']   
     assert armorapi != auth_token_new, 'Auth token has not been udpated'
 
     print('\n----------------- TEST COMPLETE -----------------\n')
