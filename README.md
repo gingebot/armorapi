@@ -31,7 +31,7 @@ import threading
 from armorapi import *
 aa = ArmorApi(username,password,auth=2)
 
-timer = threading.timer(600, a.v1_reissue_authorisation_token)
+timer = threading.timer(600, aa.v1_reissue_authorisation_token)
 timer.start()
 ```
 
