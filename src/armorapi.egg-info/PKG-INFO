@@ -1,9 +1,9 @@
 Metadata-Version: 2.1
 Name: armorapi
-Version: 0.0.1
+Version: 0.0.2
 Summary: module for working with the armorapi
 Home-page: https://github.com/gingebot/armorapi
-Author: Robin Fordham
+Author: gingebot
 Author-email: gingebot@gmail.com
 License: UNKNOWN
 Project-URL: Bug Tracker, https://github.com/gingebot/armorapi/issues
@@ -40,7 +40,7 @@ Description: # Armor Python API Auth wrapper
         from armorapi import *
         aa = ArmorApi(username,password,auth=2)
         
-        timer = threading.timer(600, a.v1_reissue_authorisation_token)
+        timer = threading.timer(600, aa.v1_reissue_authorisation_token)
         timer.start()
         ```
         
