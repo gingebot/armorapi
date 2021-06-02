@@ -6,14 +6,24 @@ from armorapi import *
 def set_creds():
     global password
     global username
+    global accountid
     password = os.environ.get('armor_password')
     username = os.environ.get('armor_username')
+    accountid = os.environ.get('armor_account_id')
 
 def test_basic_invocation():
 
     print('\n----------------- TEST START --------------------\n')
     print('*** TESTING BASIC INVOCATION :\n')
     armorapi = ArmorApi(username, password)
+
+    print('\n----------------- TEST COMPLETE -----------------\n')
+
+def test_with_account_id():
+
+    print('\n----------------- TEST START --------------------\n')
+    print('*** TESTING INVOCATION WITH ACCOUNT ID :\n')
+    armorapi = ArmorApi(username, password, accountid)
 
     print('\n----------------- TEST COMPLETE -----------------\n')
 
@@ -105,6 +115,7 @@ if __name__ == '__main__':
     logger.addHandler(handler)
     set_creds()
     test_basic_invocation()
+    test_with_account_id()
     test_explicit_v1_auth_invocation()
     test_explicit_v2_auth_invocation()
     test_401_timer()

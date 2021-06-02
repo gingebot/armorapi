@@ -47,7 +47,7 @@ aa = ArmorApi(username,password, retries401=8)
 By default the api object will use the first Armor account ID assigned to the user authenticating without the user needing to set and account ID. In many cases this will be fine as generally users are only assigned to one account, but in cases where a user has multiple accounts a specific account can be selected at instantiation:
 ```python
 from armorapi import *
-aa = ArmorApi(username,password, accountid='<account_id>')
+aa = ArmorApi(username,password, accountid=<account_id>)
 ```
 
 ### api requests

@@ -245,6 +245,7 @@ class ArmorApi:
             logger.debug('API request successful, setting account ID to: %s' % accountid)
             self.session.headers.update({'X-Account-Context': '%s' % accountid})
         elif self.accountid:
+            self.accountid = int(self.accountid)
             if self.accountid not in accountids:
                  logger.critical('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
                  raise ValueError('Provided account ID %s, it not a valid account ID for this account. Valid account IDs: %s' % (self.accountid, accountids))
